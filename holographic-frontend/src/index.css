@@ -1,0 +1,447 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cyan: #00E5FF;
+  --violet: #7C3AED;
+  --bg: #050810;
+  --surface: rgba(255,255,255,0.04);
+  --border: rgba(255,255,255,0.10);
+  --text: #e7ecf3;
+  --text-dim: rgba(231,236,243,0.55);
+  --text-mono: rgba(231,236,243,0.45);
+  --surface-hover: rgba(255,255,255,0.08);
+  /* Accent text colors */
+  --cyan-text: #7af0ff;
+  --cyan-text-dim: rgba(0,229,255,0.55);
+  --cyan-glow: rgba(0,229,255,0.5);
+  --cyan-glow-soft: rgba(0,229,255,0.18);
+  --cyan-glow-bg: rgba(0,229,255,0.03);
+  --violet-text: #c4b5fd;
+  --violet-text-dim: rgba(124,58,237,0.7);
+  --violet-glow: rgba(124,58,237,0.35);
+  --violet-glow-soft: rgba(124,58,237,0.18);
+  --violet-glow-bg: rgba(124,58,237,0.06);
+  --shadow-heavy: rgba(0,0,0,0.45);
+  --shadow-medium: rgba(0,0,0,0.3);
+  /* Error / danger */
+  --error-text: rgba(252,165,165,0.9);
+  --error-text-soft: #fca5a5;
+  --error-bg: rgba(239,68,68,0.08);
+  --error-border: rgba(239,68,68,0.2);
+}
+
+html[data-theme="light"] {
+  --bg: #f5f7fa;
+  --surface: rgba(0,0,0,0.06);
+  --surface-hover: rgba(0,0,0,0.10);
+  --border: rgba(0,0,0,0.15);
+  --text: #111827;
+  --text-dim: rgba(17,24,39,0.65);
+  --text-mono: rgba(17,24,39,0.55);
+  /* Accent text colors – darker for readability on white */
+  --cyan-text: #007c8a;
+  --cyan-text-dim: rgba(0,100,120,0.85);
+  --cyan-glow: rgba(0,130,150,0.50);
+  --cyan-glow-soft: rgba(0,130,150,0.20);
+  --cyan-glow-bg: rgba(0,130,150,0.07);
+  --violet-text: #4c1d95;
+  --violet-text-dim: rgba(76,29,149,0.85);
+  --violet-glow: rgba(76,29,149,0.30);
+  --violet-glow-soft: rgba(76,29,149,0.18);
+  --violet-glow-bg: rgba(76,29,149,0.07);
+  --shadow-heavy: rgba(0,0,0,0.15);
+  --shadow-medium: rgba(0,0,0,0.10);
+  /* Error / danger – visible on light bg */
+  --error-text: #dc2626;
+  --error-text-soft: #b91c1c;
+  --error-bg: rgba(220,38,38,0.08);
+  --error-border: rgba(220,38,38,0.25);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Manrope', system-ui, sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.18); border-radius: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Animations */
+@keyframes gradflow {
+  to { background-position: 200% center; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes floaty {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+@keyframes spin3d {
+  from { transform: rotateX(-20deg) rotateY(0); }
+  to   { transform: rotateX(-20deg) rotateY(360deg); }
+}
+@keyframes pulseB {
+  0%,100% { box-shadow: inset 0 0 30px rgba(0,0,0,0.3), 0 0 0 0 rgba(0,229,255,0); }
+  50%      { box-shadow: inset 0 0 30px rgba(0,0,0,0.3), 0 0 26px 1px rgba(0,229,255,0.28); }
+}
+@keyframes blink {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+@keyframes scanline {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Utility classes */
+.animate-slide-up    { animation: slideUp 0.5s ease both; }
+.animate-floaty      { animation: floaty 6s ease-in-out infinite; }
+.animate-spin-3d     { animation: spin3d 16s linear infinite; }
+.animate-pulse-b     { animation: pulseB 3s ease infinite; }
+.animate-blink       { animation: blink 2.4s ease infinite; }
+.animate-grad        { animation: gradflow 5s linear infinite; }
+.animate-fade-in     { animation: fadeIn 0.4s ease both; }
+
+/* Gentle "breathing" glow on the active sidebar item. */
+@keyframes navGlow {
+  0%, 100% { box-shadow: 0 0 10px rgba(0,229,255,0.06), inset 0 0 10px rgba(0,229,255,0.05); }
+  50%      { box-shadow: 0 0 24px rgba(0,229,255,0.24), inset 0 0 14px rgba(0,229,255,0.09); }
+}
+.nav-active-pulse { animation: navGlow 2.8s ease-in-out infinite; }
+
+/* Soft pulse for the little active-indicator dot. */
+@keyframes navDotPulse {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.5); opacity: 0.6; }
+}
+.nav-dot-pulse { animation: navDotPulse 2.8s ease-in-out infinite; }
+
+.grad-text {
+  background: linear-gradient(90deg, #00E5FF, #7C3AED, #00E5FF);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.glass {
+  background: var(--surface);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid var(--border);
+}
+
+.glass-cyan {
+  background: var(--surface);
+  backdrop-filter: blur(22px);
+  border: 1px solid rgba(0,229,255,0.18);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45), 0 0 30px rgba(0,229,255,0.08);
+}
+
+.glass-violet {
+  background: var(--surface);
+  backdrop-filter: blur(22px);
+  border: 1px solid rgba(124,58,237,0.25);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45), 0 0 30px rgba(124,58,237,0.10);
+}
+
+.btn-cyan {
+  background: linear-gradient(135deg, #00E5FF, #3df2ff);
+  box-shadow: 0 0 32px rgba(0,229,255,0.45), 0 8px 30px rgba(0,229,255,0.22);
+  color: #021018;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.btn-cyan:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 48px rgba(0,229,255,0.65), 0 12px 36px rgba(0,229,255,0.3);
+}
+
+.btn-outline-cyan {
+  border: 1px solid rgba(0,229,255,0.4);
+  background: rgba(0,229,255,0.08);
+  color: #7af0ff;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.btn-outline-cyan:hover {
+  background: rgba(0,229,255,0.14);
+  border-color: rgba(0,229,255,0.6);
+  box-shadow: 0 0 20px rgba(0,229,255,0.25);
+}
+
+.btn-outline-violet {
+  border: 1px solid rgba(124,58,237,0.5);
+  background: rgba(124,58,237,0.12);
+  color: #d6caff;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.btn-outline-violet:hover {
+  background: rgba(124,58,237,0.22);
+  box-shadow: 0 0 24px rgba(124,58,237,0.4);
+}
+
+/* ── Unified button system ───────────────────────────────────────────────────
+   One base (.hbtn) + variants + sizes so every button shares the same radius,
+   height, font scale and transitions. Colours reuse the existing tokens.
+   Usage: className="hbtn hbtn-secondary"  /  "hbtn hbtn-sm hbtn-accent"
+   ────────────────────────────────────────────────────────────────────────── */
+.hbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: 'Manrope', sans-serif; font-weight: 600; font-size: 13px; line-height: 1;
+  border-radius: 11px; padding: 0 16px; min-height: 38px;
+  border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+  transition: transform .18s ease, background .2s ease, box-shadow .2s ease, border-color .2s ease, color .2s ease;
+}
+.hbtn:active { transform: translateY(1px); }
+.hbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.hbtn:disabled:hover { transform: none; box-shadow: none; }
+
+.hbtn-sm { min-height: 31px; padding: 0 12px; font-size: 12px; border-radius: 9px; gap: 5px; }
+.hbtn-lg { min-height: 46px; padding: 0 26px; font-size: 15px; border-radius: 13px;
+           font-family: 'Space Grotesk', sans-serif; font-weight: 700; }
+
+.hbtn-primary {
+  background: linear-gradient(135deg, #00E5FF, #3df2ff); color: #021018; border: none;
+  box-shadow: 0 0 26px rgba(0,229,255,0.35), 0 8px 24px rgba(0,229,255,0.18);
+}
+.hbtn-primary:hover { transform: translateY(-2px);
+  box-shadow: 0 0 40px rgba(0,229,255,0.55), 0 12px 30px rgba(0,229,255,0.26); }
+
+.hbtn-accent { border: 1px solid rgba(0,229,255,0.4); background: rgba(0,229,255,0.08); color: #7af0ff; }
+.hbtn-accent:hover { background: rgba(0,229,255,0.14); border-color: rgba(0,229,255,0.6);
+  box-shadow: 0 0 20px rgba(0,229,255,0.22); }
+
+.hbtn-violet { border: 1px solid rgba(124,58,237,0.5); background: rgba(124,58,237,0.12); color: #d6caff; }
+.hbtn-violet:hover { background: rgba(124,58,237,0.22); box-shadow: 0 0 22px rgba(124,58,237,0.35); }
+
+.hbtn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+.hbtn-secondary:hover { background: var(--surface-hover); border-color: rgba(255,255,255,0.2); color: var(--text); }
+
+.hbtn-ghost { background: transparent; border: 1px solid transparent; color: var(--text-mono); }
+.hbtn-ghost:hover { background: var(--surface); color: var(--text); }
+
+.hbtn-danger { background: var(--error-bg); border: 1px solid var(--error-border); color: var(--error-text); }
+.hbtn-danger:hover { background: rgba(239,68,68,0.16); }
+
+.hbtn-icon { width: 38px; padding: 0; border-radius: 11px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+.hbtn-icon:hover { background: var(--surface-hover); color: var(--text); }
+.hbtn-icon.hbtn-sm { width: 31px; }
+
+html[data-theme="light"] .hbtn-secondary:hover { border-color: rgba(0,0,0,0.25); }
+html[data-theme="light"] .hbtn-accent { border: 1px solid rgba(0,151,167,0.45); background: rgba(0,180,210,0.08); color: #0097a7; }
+html[data-theme="light"] .hbtn-accent:hover { background: rgba(0,180,210,0.14); border-color: rgba(0,151,167,0.65); box-shadow: 0 0 16px rgba(0,151,167,0.2); }
+html[data-theme="light"] .hbtn-violet { border: 1px solid rgba(91,33,182,0.5); background: rgba(91,33,182,0.10); color: #5b21b6; }
+html[data-theme="light"] .hbtn-violet:hover { background: rgba(91,33,182,0.18); box-shadow: 0 0 18px rgba(91,33,182,0.3); }
+html[data-theme="light"] .hbtn-primary { box-shadow: 0 0 16px rgba(0,151,167,0.25), 0 8px 20px rgba(0,151,167,0.15); }
+html[data-theme="light"] .hbtn-primary:hover { box-shadow: 0 0 24px rgba(0,151,167,0.35), 0 12px 24px rgba(0,151,167,0.2); }
+html[data-theme="light"] .hbtn-danger { color: #dc2626; }
+
+.pill-active {
+  background: linear-gradient(135deg, rgba(0,229,255,0.18), rgba(124,58,237,0.20));
+  border: 1px solid rgba(0,229,255,0.5);
+  color: #bff7ff;
+  box-shadow: 0 0 24px rgba(0,229,255,0.30);
+}
+.pill-inactive {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.attr-active {
+  border: 1px solid rgba(0,229,255,0.55);
+  color: #7af0ff;
+  box-shadow: 0 0 16px rgba(0,229,255,0.22), inset 0 0 14px rgba(0,229,255,0.06);
+  background: rgba(0,229,255,0.05);
+}
+.attr-inactive {
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  background: transparent;
+}
+
+.nav-active {
+  background: rgba(0,229,255,0.08);
+  border: 1px solid rgba(0,229,255,0.32);
+  box-shadow: 0 0 22px rgba(0,229,255,0.18), inset 0 0 16px rgba(0,229,255,0.05);
+  color: #7af0ff;
+}
+.nav-inactive {
+  background: transparent;
+  border: 1px solid var(--surface);
+  color: var(--text-dim);
+}
+
+.card-saved {
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 50px rgba(0,0,0,0.4);
+  overflow: hidden;
+  transition: all 0.35s ease;
+}
+.card-saved:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 30px 70px rgba(0,0,0,0.5), 0 0 40px rgba(0,229,255,0.22);
+  border-color: rgba(0,229,255,0.4);
+}
+
+/* Use button is always visible — no hover-only hiding */
+.hist-row .row-use {
+  opacity: 1;
+  transform: translateX(0);
+  transition: box-shadow 0.2s ease;
+}
+.hist-row:hover .row-use {
+  box-shadow: 0 0 18px rgba(0,229,255,0.25);
+}
+.hist-row {
+  transition: all 0.3s ease;
+}
+.hist-row:hover {
+  background: rgba(0,229,255,0.04) !important;
+  border-left-color: #00E5FF !important;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+.space-grotesk {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+/* ── Light theme class overrides ──────────────────────────────────────────────
+   Many classes above use hardcoded dark-theme colors (bright cyan text,
+   pitch-black shadows) that have poor contrast on a light background.
+   These overrides swap them for deeper/darker cyan & violet tones and
+   softer shadows while keeping the same glassy/modern feel.
+   ────────────────────────────────────────────────────────────────────────── */
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0,150,180,0.3);
+}
+
+html[data-theme="light"] .grad-text {
+  background: linear-gradient(90deg, #0097a7, #6d28d9, #0097a7);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+html[data-theme="light"] .glass {
+  border: 1px solid var(--border);
+}
+
+html[data-theme="light"] .glass-cyan {
+  border: 1px solid rgba(0,151,167,0.3);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.12), 0 0 30px rgba(0,151,167,0.08);
+}
+
+html[data-theme="light"] .glass-violet {
+  border: 1px solid rgba(91,33,182,0.3);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.12), 0 0 30px rgba(91,33,182,0.08);
+}
+
+html[data-theme="light"] .btn-cyan {
+  box-shadow: 0 0 16px rgba(0,151,167,0.25), 0 8px 20px rgba(0,151,167,0.15);
+}
+html[data-theme="light"] .btn-cyan:hover {
+  box-shadow: 0 0 24px rgba(0,151,167,0.35), 0 12px 24px rgba(0,151,167,0.2);
+}
+
+html[data-theme="light"] .btn-outline-cyan {
+  border: 1px solid rgba(0,151,167,0.45);
+  background: rgba(0,180,210,0.08);
+  color: #0097a7;
+}
+html[data-theme="light"] .btn-outline-cyan:hover {
+  background: rgba(0,180,210,0.14);
+  border-color: rgba(0,151,167,0.65);
+  box-shadow: 0 0 16px rgba(0,151,167,0.2);
+}
+
+html[data-theme="light"] .btn-outline-violet {
+  border: 1px solid rgba(91,33,182,0.5);
+  background: rgba(91,33,182,0.10);
+  color: #5b21b6;
+}
+html[data-theme="light"] .btn-outline-violet:hover {
+  background: rgba(91,33,182,0.18);
+  box-shadow: 0 0 18px rgba(91,33,182,0.3);
+}
+
+html[data-theme="light"] .pill-active {
+  background: linear-gradient(135deg, rgba(0,151,167,0.16), rgba(91,33,182,0.16));
+  border: 1px solid rgba(0,151,167,0.5);
+  color: #006064;
+  box-shadow: 0 0 14px rgba(0,151,167,0.18);
+}
+html[data-theme="light"] .pill-inactive {
+  border: 1px solid rgba(0,0,0,0.16);
+}
+
+html[data-theme="light"] .attr-active {
+  border: 1px solid rgba(0,151,167,0.55);
+  color: #00838f;
+  box-shadow: 0 0 10px rgba(0,151,167,0.18), inset 0 0 10px rgba(0,151,167,0.05);
+  background: rgba(0,151,167,0.06);
+}
+
+html[data-theme="light"] .nav-active {
+  background: rgba(0,151,167,0.08);
+  border: 1px solid rgba(0,151,167,0.35);
+  box-shadow: 0 0 14px rgba(0,151,167,0.15), inset 0 0 10px rgba(0,151,167,0.05);
+  color: #00838f;
+}
+
+html[data-theme="light"] .card-saved {
+  box-shadow: 0 18px 40px rgba(0,0,0,0.10);
+}
+html[data-theme="light"] .card-saved:hover {
+  box-shadow: 0 24px 50px rgba(0,0,0,0.14), 0 0 24px rgba(0,151,167,0.18);
+  border-color: rgba(0,151,167,0.4);
+}
+
+html[data-theme="light"] .hist-row:hover {
+  background: rgba(0,151,167,0.07) !important;
+  border-left-color: #0097a7 !important;
+}
+html[data-theme="light"] .hist-row:hover .row-use {
+  box-shadow: 0 0 12px rgba(0,151,167,0.2);
+}
+
+/* ── RTL sidebar adjustments ─────────────────────────────────────────────────
+   When dir="rtl", flex row mirrors automatically — sidebar ends up on the right.
+   Flip the dividing border from right-edge to left-edge.
+   ────────────────────────────────────────────────────────────────────────── */
+html[dir="rtl"] .holo3d-sidebar {
+  border-right: none !important;
+  border-left: 1px solid var(--border);
+}
+html[dir="rtl"] .holo3d-sidebar .ctrl-enter-hint {
+  direction: rtl;
+}

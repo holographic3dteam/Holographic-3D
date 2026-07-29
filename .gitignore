@@ -1,0 +1,68 @@
+# ───────────────────────────────────────────────
+# Secrets / environment  (NEVER commit these)
+# ───────────────────────────────────────────────
+.env
+*.env
+!*.env.example
+.flask_secret
+*.pem
+*.key
+
+# ───────────────────────────────────────────────
+# Python
+# ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+**/venv/
+**/.venv/
+pyvenv.cfg
+*pyvenv*.cfg
+
+# ───────────────────────────────────────────────
+# Node / frontend
+# ───────────────────────────────────────────────
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.vite/
+*.local
+
+# ───────────────────────────────────────────────
+# ML model weights (too large for GitHub — share separately)
+# ───────────────────────────────────────────────
+*.safetensors
+*.ckpt
+*.pth
+*.pt
+*.onnx
+flask_app/models/
+
+# ───────────────────────────────────────────────
+# Generated / runtime assets & databases
+# ───────────────────────────────────────────────
+flask_app/static/generated_assets/
+flask_app/static/generated_meshes/
+flask_app/static/factory_assets/
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# ───────────────────────────────────────────────
+# OS / IDE
+# ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

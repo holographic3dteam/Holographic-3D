@@ -1,0 +1,50 @@
+# Holo3D — backend dependencies
+# Versions pinned to a known-good working setup.
+#
+# ── STEP 1: install PyTorch FIRST, matching your GPU/CUDA ──────────────
+#   (don't put torch here — the build is machine specific)
+#   Example for CUDA 12.x:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+#
+# ── STEP 2: install these ─────────────────────────────────────────────
+#   pip install -r requirements.txt
+#
+# ── STEP 3: the 3D step needs the Hunyuan3D-2 library (hy3dgen) ────────
+#   Get the "Hunyuan3D-2" project (clone github.com/Tencent/Hunyuan3D-2 or
+#   use the copy shared by the owner), then inside it:
+#     pip install -r requirements.txt
+#     pip install -e .
+#   (this also builds custom_rasterizer used for texture baking)
+
+# ── Web / API ──────────────────────────────
+Flask==3.1.3
+flask-cors==6.0.5
+Flask-SQLAlchemy==3.1.1
+PyMySQL==1.2.0
+Werkzeug==3.1.8
+python-dotenv
+
+# ── Factory search / matching ──────────────
+numpy==2.4.6
+scikit-learn==1.9.0
+sentence-transformers==5.5.1
+
+# ── 2D image generation (SDXL) + FLUX Kontext editing ──────
+# FLUX.1 Kontext needs diffusers >= 0.39. The 3D texture step needs the OLDER
+# diffusers 0.32.1 — that runs in the separate `hunyuan_venv` (see README),
+# so DON'T downgrade this one.
+diffusers==0.39.0
+transformers==4.54.1
+accelerate==1.6.0
+safetensors==0.4.5
+Pillow==10.4.0
+
+# ── Background removal ─────────────────────
+rembg==2.0.76
+onnxruntime==1.26.0
+PyMatting==1.1.15
+
+# ── 3D mesh processing ─────────────────────
+trimesh==4.12.2
+xatlas==0.0.11
+pymeshlab==2025.7.post1
