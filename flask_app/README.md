@@ -37,7 +37,7 @@
 
 ### 0) تنزيل المشروع
 ```bash
-git clone <رابط الريبو على GitHub>
+git clone https://github.com/holographic3dteam/Holographic-3D.git
 cd "Holographic 3D"
 ```
 الريبو فيه فولدرين: `flask_app` (الـ backend) و `holographic-frontend` (الواجهة).
