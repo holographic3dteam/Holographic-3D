@@ -73,3 +73,9 @@ def new_job_id() -> str:
 # ---------------------------------------------------------------------------
 def sse_event(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
+
+# ---------------------------------------------------------------------------
+# Generate job store (image generation) — same polling pattern as edit & 3D
+# ---------------------------------------------------------------------------
+generate_jobs: dict = {}
+generate_jobs_lock = threading.Lock()

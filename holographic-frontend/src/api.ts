@@ -148,25 +148,17 @@ function handleAuthError(res: Response): void {
   }
 }
 
-// ─── SSE Generate ──────────────────────────────────────────────────────────────
+// ─── Generate (polling-based — works through any proxy) ────────────────────────
 
-let _activeES: EventSource | null = null;
+let _aborted = false;
 let _activeReject: ((reason: Error) => void) | null = null;
-let _aborted = false; // global flag to block stale retry timers after stop
 
 export async function abortGeneration() {
   _aborted = true;
-  // 1. Close SSE connection on frontend
-  if (_activeES) {
-    _activeES.close();
-    _activeES = null;
-  }
-  // 2. Reject the promise so calling code gets __aborted__
   if (_activeReject) {
     _activeReject(new Error("__aborted__"));
     _activeReject = null;
   }
-  // 3. Tell backend to stop too — so GPU stops working
   try {
     await fetch("/api/stop", { method: "POST" });
   } catch {
@@ -183,125 +175,87 @@ export async function checkBackendReady(): Promise<boolean> {
   } catch { return false; }
 }
 
-export function generateDesign(
+export async function generateDesign(
   prompt: string,
   onProgress?: (event: ProgressEvent) => void,
   seed?: number,
   steps?: number,
 ): Promise<GenerateResponse> {
-  // Close any previous connection first
-  if (_activeES) {
-    _activeES.close();
-    _activeES = null;
-  }
+  _aborted = false;
 
-  _aborted = false; // reset on each new generation
+  const params = new URLSearchParams({ prompt });
+  if (seed  !== undefined) params.set("seed",  String(seed));
+  if (steps !== undefined) params.set("steps", String(steps));
 
+  // 1. Start the job
+  const res = await fetch(`/api/generate?${params.toString()}`);
+  handleAuthError(res);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Generation failed");
+
+  const jobId: string = data.job_id;
+  if (!jobId) throw new Error("Server did not return a job id");
+
+  // 2. Poll for status
   return new Promise((resolve, reject) => {
     _activeReject = reject;
+    let consecutiveErrors = 0;
 
-    const params = new URLSearchParams({ prompt });
-    if (seed  !== undefined) params.set("seed",  String(seed));
-    if (steps !== undefined) params.set("steps", String(steps));
-    const url = `/api/generate?${params.toString()}`;
+    const poll = async () => {
+      if (_aborted) { _activeReject = null; return; }
 
-    let aiGenerated: AiGenerated | null = null;
-    let factoryMatch: FactoryMatch | null = null;
-    let errorRetries = 0;
-    const MAX_ERROR_RETRIES = 3;
-    let settled = false;
+      try {
+        const s = await fetch(`/api/generate_status/${jobId}`);
+        handleAuthError(s);
+        const job = await s.json();
+        if (!s.ok) throw new Error(job.error || "Generation failed");
+        consecutiveErrors = 0;
 
-    const cleanup = () => {
-      if (_activeES) { _activeES.close(); _activeES = null; }
-      _activeReject = null;
-      if (silenceTimer) clearTimeout(silenceTimer);
-    };
-
-    // Reject if the connection goes silent for >5 minutes (model crash, network drop, etc.)
-    const SILENCE_TIMEOUT_MS = 5 * 60 * 1000;
-    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const resetSilenceTimer = () => {
-      if (silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => {
-        cleanup();
-        if (!settled) { settled = true; reject(new Error("Generation timed out — no response for 5 minutes. Please try again.")); }
-      }, SILENCE_TIMEOUT_MS);
-    };
-
-    const onMessage = (e: MessageEvent) => {
-      resetSilenceTimer();
-      errorRetries = 0; // successful message = connection is healthy
-      let event: ProgressEvent;
-      try { event = JSON.parse(e.data); } catch { return; }
-
-      onProgress?.(event);
-
-      if (event.type === "done") {
-        aiGenerated = event.result;
-        if (factoryMatch !== null) {
-          cleanup();
-          if (!settled) { settled = true; resolve({ status: "success", factory_match: factoryMatch, ai_generated: aiGenerated }); }
+        // Fire progress events
+        if (job.last_event && onProgress) {
+          onProgress(job.last_event);
         }
-      }
 
-      if (event.type === "factory_match") {
-        factoryMatch = event.factory_match;
-        if (aiGenerated !== null) {
-          cleanup();
-          if (!settled) { settled = true; resolve({ status: "success", factory_match: factoryMatch, ai_generated: aiGenerated }); }
+        if (job.status === "processing") {
+          setTimeout(poll, 1500);
+          return;
         }
-      }
 
-      if (event.type === "stopped") {
-        cleanup();
-        if (!settled) { settled = true; reject(new Error("__aborted__")); }
-      }
+        _activeReject = null;
 
-      if (event.type === "error") {
-        cleanup();
-        if (!settled) { settled = true; reject(new Error(event.message)); }
+        if (job.status === "stopped") {
+          reject(new Error("__aborted__"));
+          return;
+        }
+
+        if (job.status === "error") {
+          reject(new Error(job.error || "Generation failed"));
+          return;
+        }
+
+        // completed
+        resolve({
+          status: "success",
+          factory_match: job.factory_match || {
+            id: null, description: "No close match found",
+            file_path: null, match_score: 0,
+          },
+          ai_generated: job.ai_generated || {
+            message: "Image generated", preview_url: null, status: "success",
+          },
+        });
+      } catch (err) {
+        consecutiveErrors++;
+        if (consecutiveErrors >= 8) {
+          _activeReject = null;
+          reject(err);
+          return;
+        }
+        setTimeout(poll, 2000);
       }
     };
 
-    const onError = function (this: EventSource) {
-      if (settled) return;
-      // If the server rejected the connection (e.g. 401 auth error),
-      // readyState is CLOSED — don't retry, surface the error immediately
-      if (this.readyState === EventSource.CLOSED) {
-        cleanup();
-        if (!settled) {
-          settled = true;
-          // Clear stale login state so user gets redirected to login
-          localStorage.removeItem("holo3d_logged_in");
-          reject(new Error("Session expired — please log in again."));
-        }
-        return;
-      }
-      errorRetries++;
-      if (errorRetries > MAX_ERROR_RETRIES) {
-        cleanup();
-        if (!settled) { settled = true; reject(new Error("Connection to generation service lost. Please try again.")); }
-        return;
-      }
-      // Close broken connection and retry after a short delay
-      // This handles browser tab backgrounding that temporarily kills SSE
-      if (_activeES) _activeES.close();
-      setTimeout(() => {
-        if (settled || _aborted) return; // don't retry if user stopped
-        const retryEs = new EventSource(url);
-        _activeES = retryEs;
-        retryEs.onmessage = onMessage;
-        retryEs.onerror = onError.bind(retryEs);
-        resetSilenceTimer();
-      }, 2000);
-    };
-
-    const es = new EventSource(url);
-    _activeES = es;
-    es.onmessage = onMessage;
-    es.onerror = onError.bind(es);
-    resetSilenceTimer();
+    setTimeout(poll, 1500);
   });
 }
 

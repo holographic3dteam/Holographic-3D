@@ -1,15 +1,14 @@
 """
 routes/generation.py
-Blueprint for AI image generation (SSE), image editing (FLUX Kontext),
+Blueprint for AI image generation (polling), image editing (FLUX Kontext),
 3D mesh generation (Hunyuan3D), stop control, and health check.
 """
 
 import os
-import queue
 import threading
 import time
 
-from flask import Blueprint, request, jsonify, Response, stream_with_context, current_app
+from flask import Blueprint, request, jsonify, current_app
 
 from decorators import login_required
 from extensions import (
@@ -17,7 +16,8 @@ from extensions import (
     is_stop_requested, reset_stop_flag, request_stop,
     edit_jobs, edit_jobs_lock,
     three_d_jobs, three_d_jobs_lock,
-    prune_jobs, new_job_id, sse_event,
+    generate_jobs, generate_jobs_lock,
+    prune_jobs, new_job_id,
 )
 
 generation_bp = Blueprint("generation", __name__)
@@ -44,12 +44,72 @@ def stop_generation():
 
 
 # ───────────────────────────────────────────────────────────────────────────
-# Image Generation (SSE)
+# Image Generation (async job with polling — works through any proxy)
 # ───────────────────────────────────────────────────────────────────────────
+
+def _run_generate_job(app, job_id, user_prompt, seed, gen_steps):
+    """Background worker: runs FLUX image generation."""
+    with app.app_context():
+        reset_stop_flag()
+        try:
+            try:
+                import edit_logic, ai_logic
+                edit_logic.unload_pipe()
+                ai_logic.ensure_loaded()
+            except Exception as _e:
+                print(f"[generate] model handoff warning: {_e}")
+
+            from search_logic import search_factory_products
+            best_match = search_factory_products(user_prompt)
+
+            # Update job with factory match as soon as it's ready
+            with generate_jobs_lock:
+                generate_jobs[job_id]["factory_match"] = {
+                    "id":          best_match['id'] if best_match else None,
+                    "description": best_match['description'] if best_match else "No close match found",
+                    "file_path":   best_match['file_path'] if best_match else None,
+                    "match_score": best_match['score'] if best_match else 0,
+                }
+
+            def progress_fn(event: dict):
+                with generate_jobs_lock:
+                    j = generate_jobs.get(job_id)
+                    if j is not None:
+                        j["last_event"] = event
+                        if event.get("type") == "step":
+                            j["step"] = event.get("step", 0)
+                            j["total_steps"] = event.get("total_steps", gen_steps)
+                        elif event.get("type") == "done":
+                            j["ai_generated"] = event.get("result")
+
+            from ai_logic import generate_ai_design, StopGenerationError
+            generate_ai_design(
+                user_prompt,
+                progress_fn=progress_fn,
+                seed=seed,
+                stop_fn=is_stop_requested,
+                steps=gen_steps,
+            )
+
+            with generate_jobs_lock:
+                generate_jobs[job_id]["status"] = "completed"
+
+        except Exception as e:
+            if type(e).__name__ == "StopGenerationError":
+                with generate_jobs_lock:
+                    generate_jobs[job_id].update(status="stopped", error="Generation stopped by user")
+            else:
+                import traceback
+                traceback.print_exc()
+                with generate_jobs_lock:
+                    generate_jobs[job_id].update(status="error", error=str(e))
+        finally:
+            generation_lock.release()
+
 
 @generation_bp.route('/api/generate', methods=['GET'])
 @login_required
-def generate_design_sse():
+def generate_design():
     user_prompt = request.args.get('prompt', '').strip()
     seed  = request.args.get('seed', None)
     try:
@@ -64,73 +124,38 @@ def generate_design_sse():
     if not generation_lock.acquire(blocking=False):
         return jsonify({"error": "A generation is already in progress. Stop it or wait for it to finish."}), 429
 
-    event_queue: queue.Queue = queue.Queue()
-
-    def progress_fn(event: dict):
-        event_queue.put(event)
-
-    # Capture the app for the background thread's app context.
-    app = current_app._get_current_object()
-
-    def run_generation():
-        with app.app_context():
-            reset_stop_flag()
-            try:
-                try:
-                    import edit_logic, ai_logic
-                    edit_logic.unload_pipe()
-                    ai_logic.ensure_loaded()
-                except Exception as _e:
-                    print(f"[generate] model handoff warning: {_e}")
-
-                from search_logic import search_factory_products
-                best_match = search_factory_products(user_prompt)
-
-                from ai_logic import generate_ai_design, StopGenerationError
-                generate_ai_design(
-                    user_prompt,
-                    progress_fn=progress_fn,
-                    seed=seed,
-                    stop_fn=is_stop_requested,
-                    steps=gen_steps,
-                )
-                event_queue.put({
-                    "type": "factory_match",
-                    "factory_match": {
-                        "id":          best_match['id'] if best_match else None,
-                        "description": best_match['description'] if best_match else "No close match found",
-                        "file_path":   best_match['file_path'] if best_match else None,
-                        "match_score": best_match['score'] if best_match else 0,
-                    }
-                })
-            except Exception as e:
-                # Check if it's a StopGenerationError
-                if type(e).__name__ == "StopGenerationError":
-                    event_queue.put({"type": "stopped", "message": "Generation stopped by user"})
-                else:
-                    event_queue.put({"type": "error", "message": str(e)})
-            finally:
-                event_queue.put(None)
-                generation_lock.release()
-
-    thread = threading.Thread(target=run_generation, daemon=True)
-    thread.start()
-
-    def event_stream():
-        while True:
-            event = event_queue.get()
-            if event is None:
-                break
-            yield sse_event(event)
-
-    return Response(
-        stream_with_context(event_stream()),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
+    prune_jobs(generate_jobs, generate_jobs_lock)
+    job_id = new_job_id()
+    with generate_jobs_lock:
+        generate_jobs[job_id] = {
+            "status": "processing",
+            "step": 0,
+            "total_steps": gen_steps,
+            "ai_generated": None,
+            "factory_match": None,
+            "error": None,
+            "last_event": None,
+            "created": time.time(),
         }
+
+    app = current_app._get_current_object()
+    t = threading.Thread(
+        target=_run_generate_job,
+        args=(app, job_id, user_prompt, seed, gen_steps),
+        daemon=True,
     )
+    t.start()
+    return jsonify({"job_id": job_id, "status": "processing"}), 202
+
+
+@generation_bp.route('/api/generate_status/<job_id>', methods=['GET'])
+@login_required
+def generate_status(job_id):
+    with generate_jobs_lock:
+        job = generate_jobs.get(job_id)
+        if job is None:
+            return jsonify({"error": "Unknown job_id"}), 404
+        return jsonify({"job_id": job_id, **job})
 
 
 # ───────────────────────────────────────────────────────────────────────────
