@@ -1,7 +1,7 @@
 """
 hunyuan_logic.py
-Offloads SDXL from GPU, then spawns Hunyuan3D as a subprocess.
-Subprocess gets full VRAM. SDXL reloads on next generation request.
+Offloads FLUX schnell from GPU, then spawns Hunyuan3D as a subprocess.
+Subprocess gets full VRAM. FLUX schnell reloads on next generation request.
 """
 import os
 import subprocess
@@ -33,12 +33,6 @@ HUNYUAN_PYTHON = (
 MESH_DIR = BASE_DIR / "static" / "generated_meshes"
 MESH_DIR.mkdir(exist_ok=True, parents=True)
 
-# The Hunyuan texture pipeline needs diffusers 0.32.1, but the main Flask process
-# runs a newer diffusers for FLUX Kontext. Since Hunyuan runs as a subprocess, we
-# point it at a separate venv (with the old diffusers) via HUNYUAN_PYTHON. Falls
-# back to the current interpreter if not set.
-HUNYUAN_PYTHON = os.environ.get("HUNYUAN_PYTHON", sys.executable)
-
 
 def _free_all_vram():
     """Aggressively free ALL GPU memory from the Flask process."""
@@ -46,14 +40,14 @@ def _free_all_vram():
         return
     import ai_logic  # import here to avoid circular import at module level
 
-    # Fully unload SDXL + CLIP (VRAM *and* RAM), not just offload to CPU. The
-    # Hunyuan subprocess also needs system RAM (texture painting spills there), and
-    # a 15 GB machine can't hold SDXL (~6.5 GB parked in RAM) alongside it →
-    # MemoryError. The next generation reloads SDXL via ai_logic.ensure_loaded().
+    # Fully unload FLUX schnell + CLIP (VRAM *and* RAM), not just offload to CPU.
+    # The Hunyuan subprocess also needs system RAM (texture painting spills there),
+    # and a 15 GB machine can't hold FLUX (~4.6 GB parked in RAM) alongside it →
+    # MemoryError. The next generation reloads FLUX via ai_logic.ensure_loaded().
     try:
         ai_logic.unload()
     except Exception as _ue:
-        print(f"[Hunyuan] SDXL unload failed ({_ue}); offloading to CPU instead.")
+        print(f"[Hunyuan] FLUX schnell unload failed ({_ue}); offloading to CPU instead.")
         if ai_logic.pipe is not None:
             ai_logic.pipe.to("cpu")
         if ai_logic.clip_model is not None:
@@ -72,20 +66,20 @@ def _free_all_vram():
 
 
 def _restore_vram():
-    """Move SDXL + CLIP back to GPU after Hunyuan subprocess exits."""
+    """Move FLUX schnell + CLIP back to GPU after Hunyuan subprocess exits."""
     if not torch.cuda.is_available():
         return
     import ai_logic
-    # If SDXL was fully unloaded (edit / one-model-at-a-time policy), don't
+    # If FLUX was fully unloaded (edit / one-model-at-a-time policy), don't
     # reload it here — the next generation restores it lazily via ensure_loaded().
     if ai_logic.pipe is None:
-        print("[Hunyuan] SDXL is unloaded; leaving it for the next generation to reload.")
+        print("[Hunyuan] FLUX schnell is unloaded; leaving it for the next generation to reload.")
         return
     device = ai_logic.DEVICE
     try:
         ai_logic.pipe.to(device)
         ai_logic.clip_model.to(device)
-        print(f"[Hunyuan] SDXL + CLIP restored to {device}")
+        print(f"[Hunyuan] FLUX schnell + CLIP restored to {device}")
     except Exception as e:
         # Rollback — ensure both stay on CPU (no mixed state where some layers
         # are on GPU and others on CPU, which causes cryptic runtime errors).
@@ -144,6 +138,18 @@ def generate_3d_mesh(image_relative_path: str, base_name: str, steps: int = 5) -
         process.wait()
 
         if process.returncode != 0:
+            # Check if the mesh files were saved before the crash (the runner
+            # exports untextured meshes BEFORE attempting texture painting).
+            # If they exist, return them instead of failing — the user gets a
+            # geometry-only 3D model, which is far better than an error page.
+            if os.path.exists(glb) and os.path.getsize(glb) > 0:
+                print(f"[Hunyuan] Subprocess crashed (exit {process.returncode}) but mesh files exist — returning geometry-only mesh.")
+                return {
+                    "glb": f"static/generated_meshes/{safe_name}.glb",
+                    "stl": f"static/generated_meshes/{safe_name}.stl",
+                    "obj": f"static/generated_meshes/{safe_name}.obj",
+                }
+
             tail = "\n".join(stderr_lines[-20:])
             raise RuntimeError(
                 f"Hunyuan3D subprocess failed (exit {process.returncode}):\n{tail}"
@@ -170,7 +176,7 @@ def generate_3d_mesh(image_relative_path: str, base_name: str, steps: int = 5) -
                     gc.collect()
                     torch.cuda.empty_cache()
                 else:
-                    print(f"[Hunyuan] All restore attempts failed. SDXL will run on CPU until next generation (self-healing).")
+                    print(f"[Hunyuan] All restore attempts failed. FLUX schnell will run on CPU until next generation (self-healing).")
 
     return {
         "glb": f"static/generated_meshes/{safe_name}.glb",

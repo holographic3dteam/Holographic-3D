@@ -66,3 +66,15 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# Branding + demo material (not code)
+Identity/
+*.mp4
+flask_app/demo_voiceover_pure.txt
+flask_app/demo_voiceover_script.md
+
+# Branding + demo material (not code)
+Identity/
+*.mp4
+flask_app/demo_voiceover_pure.txt
+flask_app/demo_voiceover_script.md

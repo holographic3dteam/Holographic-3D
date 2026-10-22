@@ -20,6 +20,20 @@ Run download_flux_kontext.bat first to fetch all files (~17 GB).
 
 import os
 
+# ── Compatibility patch: older transformers doesn't expose tensor ops on
+# BaseModelOutputWithPooling, but newer diffusers calls .norm() and / on it.
+try:
+    from transformers.modeling_outputs import BaseModelOutputWithPooling as _BMOP
+    if not hasattr(_BMOP, "norm"):
+        def _bmop_norm(self, *a, **k): return self.pooler_output.norm(*a, **k)
+        _BMOP.norm = _bmop_norm
+    def _bmop_div(self, other): return self.pooler_output / other
+    def _bmop_rdiv(self, other): return other / self.pooler_output
+    _BMOP.__truediv__  = _bmop_div
+    _BMOP.__rtruediv__ = _bmop_rdiv
+except Exception:
+    pass
+
 # Reduce CUDA fragmentation on the 8 GB card (the OOM message recommends this).
 # Must be set before torch initialises the CUDA allocator, so it lives here at
 # the very top before `import torch`.
@@ -113,10 +127,15 @@ def _get_pipe():
     tokenizer = CLIPTokenizer.from_pretrained(str(MODEL_DIR / "tokenizer"))
 
     # ── T5-XXL text encoder ───────────────────────────────────────────────
+    # Free RAM before the heaviest load
+    import gc as _gc
+    _gc.collect()
+
     print("[edit_logic] Loading T5-XXL text encoder (this may take a minute)...")
     text_encoder_2 = T5EncoderModel.from_pretrained(
         str(MODEL_DIR / "text_encoder_2"),
         torch_dtype=torch.bfloat16,
+        low_cpu_mem_usage=True,
     )
     tokenizer_2 = T5TokenizerFast.from_pretrained(str(MODEL_DIR / "tokenizer_2"))
 

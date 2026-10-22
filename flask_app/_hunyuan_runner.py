@@ -262,7 +262,7 @@ def main():
         # Windows page file (so no MemoryError), at the cost of a slower bake.
         # Drop to 512 (via HUNYUAN_TEXTURE_SIZE) if the bake is too slow.
         try:
-            _tex_size = int(os.environ.get("HUNYUAN_TEXTURE_SIZE", "1024"))
+            _tex_size = int(os.environ.get("HUNYUAN_TEXTURE_SIZE", "512"))
         except ValueError:
             _tex_size = 1024
 
@@ -301,6 +301,38 @@ def main():
             print("[runner] Progress bars re-enabled for painting stages.")
         except Exception as _pe:
             print(f"[runner] Could not re-enable progress bars: {_pe}")
+
+        # ── VRAM cleanup hook ──────────────────────────────────────────────
+        # After the delight stage (50 steps), its UNet is moved back to CPU
+        # by enable_model_cpu_offload(), BUT PyTorch's CUDA allocator still
+        # holds the freed blocks in its cache. The multiview UNet then can't
+        # fit because torch.cuda.mem_get_info() shows free space but the
+        # allocator won't release it without an explicit empty_cache().
+        # Fix: wrap the multiview pipeline's __call__ to force a full VRAM
+        # flush before the multiview UNet gets moved to GPU.
+        try:
+            _mv_pipeline = paint_pipeline.models['multiview_model'].pipeline
+            _orig_mv_call = _mv_pipeline.__class__.__call__
+
+            def _mv_call_with_vram_flush(self, *args, **kwargs):
+                # Force ALL delight-stage VRAM back to the OS before multiview
+                gc.collect()
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                _free, _total = torch.cuda.mem_get_info()
+                print(f"[runner] VRAM flushed before multiview: {_free/1024**3:.2f}GB free / {_total/1024**3:.2f}GB total", flush=True)
+                return _orig_mv_call(self, *args, **kwargs)
+
+            # Bind as an unbound method on the class won't work if there are
+            # other instances; safer to patch THIS instance's __call__:
+            import types
+            _mv_pipeline.__call__ = types.MethodType(
+                lambda self, *a, **kw: _mv_call_with_vram_flush(self, *a, **kw),
+                _mv_pipeline,
+            )
+            print("[runner] VRAM flush hook installed between delight → multiview stages.")
+        except Exception as _hook_err:
+            print(f"[runner] Could not install VRAM flush hook: {_hook_err}")
 
         free_bytes, total_bytes = torch.cuda.mem_get_info()
         print(f"[runner] VRAM before painting: {free_bytes/1024**3:.2f}GB free / {total_bytes/1024**3:.2f}GB total")
